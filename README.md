@@ -1,23 +1,29 @@
-# Finance Data-Driven Platform
+# Data Investor Pipeline
 
 ## Description
 
-Pipeline di processamento dei dati e l'elaborazioni di feature per la parte analitica relativa al progetto data-investor
+The Data Investor Pipeline is a data processing and feature engineering pipeline designed for analytical purposes in the data-investor project.
 
 ## Table of Contents
 
-[aggiungi table of content]
+- [Data Investor Pipeline](#data-investor-pipeline)
+  - [Description](#description)
+  - [Table of Contents](#table-of-contents)
+  - [Getting Started](#getting-started)
+    - [Installation](#installation)
+  - [Usage](#usage)
+  - [License](#license)
 
 ## Getting Started
 
 ### Installation
 
-- installazione del requirements
-- settaggio delle chiavi nel file .env partendo dal file .env.example
+- To set up the project, first install the requirements specified in the `requirements.txt` file.
+- Set up the environment variables by using the `.env.example` file as a template to create a `.env` file.
 
 ## Usage
 
-Lancia run.py per eseguire la pipeline
+To execute the pipeline, run `run.py` from the command line.
 
 ## License
 
