@@ -70,7 +70,20 @@ def get_new_symbols(list_symbols, engine):
 
 
 def fetch_and_store_profiles(engine, api_key, SessionLocal, run_id):
-    list_symbols = fetch_equity_symbols()
+    # list_symbols = fetch_equity_symbols()
+    list_symbols = [
+        "AAPL",
+        "MSFT",
+        "GOOG",
+        "AMZN",
+        "FB",
+        "TSLA",
+        "META",
+        "PYPL",
+        "PLTR",
+        "NIO",
+        "BRK-B",
+    ]
     new_symbols = get_new_symbols(list_symbols, engine)
 
     if new_symbols:

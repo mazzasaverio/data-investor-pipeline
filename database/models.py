@@ -16,14 +16,14 @@ Base = declarative_base()
 # SQLAlchemy Models
 class Profile(Base):
     __tablename__ = "profiles"
-    symbol = Column(String, primary_key=True, index=True)
-    companyName = Column(String)
+    symbol = Column(String(255), primary_key=True, index=True)
+    companyName = Column(String(255))
     cik = Column(Integer)
-    exchange = Column(String)
-    exchangeShortName = Column(String)
-    industry = Column(String)
-    sector = Column(String)
-    country = Column(String)
+    exchange = Column(String(255))
+    exchangeShortName = Column(String(255))
+    industry = Column(String(255))
+    sector = Column(String(255))
+    country = Column(String(255))
     ipoDate = Column(Date)
     defaultImage = Column(Boolean)
     isEtf = Column(Boolean)
@@ -36,14 +36,14 @@ class CashFlow(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    date = Column(String)  # Representing period[Q-DEC] as string
-    symbol = Column(String, index=True)
-    reportedCurrency = Column(String)
+    date = Column(String(255))  # Representing period[Q-DEC] as String(255)
+    symbol = Column(String(255), index=True)
+    reportedCurrency = Column(String(255))
     cik = Column(BigInteger)
     fillingDate = Column(Date)
     acceptedDate = Column(Date)
     calendarYear = Column(BigInteger)
-    period = Column(String)
+    period = Column(String(255))
 
     # Columns changed from Integer to BigInteger
     netIncome = Column(BigInteger)
@@ -77,8 +77,8 @@ class CashFlow(Base):
     capitalExpenditure = Column(BigInteger)
     freeCashFlow = Column(BigInteger)
 
-    link = Column(String)
-    finalLink = Column(String)
+    link = Column(String(255))
+    finalLink = Column(String(255))
 
 
 # New model to represent the DataFrame
@@ -86,7 +86,7 @@ class MarketCapData(Base):
     __tablename__ = "hist_marketcap"
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    symbol = Column(String, index=True)
+    symbol = Column(String(255), index=True)
     date = Column(DateTime)
     marketCap = Column(BigInteger)
 
@@ -99,7 +99,7 @@ class HistPrice(Base):
     __tablename__ = "hist_prices"
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    symbol = Column(String, index=True)
+    symbol = Column(String(255), index=True)
     date = Column(DateTime)
     open = Column(Float)
     high = Column(Float)
@@ -111,5 +111,5 @@ class HistPrice(Base):
     change = Column(Float)
     changePercent = Column(Float)
     vwap = Column(Float)
-    label = Column(String)
+    label = Column(String(255))
     changeOverTime = Column(Float)
