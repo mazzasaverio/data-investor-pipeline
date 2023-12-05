@@ -13,22 +13,69 @@ from utils.process_data import filter_bigint_range
 from datetime import datetime
 import pandas as pd
 from loguru import logger
+from database.db_connector import DBConnector
 
 # Add the run_id to logger context
 run_id = datetime.now().isoformat()
 logger.bind(run_id=run_id)
 
 
-def store_to_db(df, table_name, engine, SessionLocal, run_id):
+# def store_to_db(df, table_name, db_connector, run_id):
+#     try:
+#         if db_connector.mongo_db is not None:
+#             # MongoDB
+#             db_connector.mongo_db.profiles.insert_many(df.to_dict(orient="records"))
+#             # db_connector.write_to_mongo(table_name, df)
+#         else:
+#             # SQL Databases
+#             with session_scope(db_connector.SessionLocal, run_id) as session:
+#                 df.to_sql(
+#                     table_name, con=db_connector.engine, if_exists="append", index=False
+#                 )
+#                 session.flush()
+
+#         logger.bind(run_id=run_id).info(f"Stored data into {table_name}")
+#     except Exception as e:
+#         logger.bind(run_id=run_id).error(
+#             f"Failed to store data into {table_name}. Error: {e}"
+#         )
+
+
+def store_to_db(df, table_name, db_connector, run_id):
     try:
-        with session_scope(SessionLocal, run_id) as session:
-            df.to_sql(table_name, con=engine, if_exists="append", index=False)
-            session.flush()
-        logger.bind(run_id=run_id).info(f"Stored data into table {table_name}")
+        if df.empty:
+            logger.bind(run_id=run_id).warning(f"No data to store in {table_name}.")
+            return False
+
+        if db_connector.mongo_db is not None:
+            # MongoDB
+            result = db_connector.mongo_db[table_name].insert_many(
+                df.to_dict(orient="records")
+            )
+            if result.acknowledged:
+                logger.bind(run_id=run_id).info(
+                    f"Stored {len(result.inserted_ids)} records into {table_name}."
+                )
+                return True
+            else:
+                logger.bind(run_id=run_id).error(
+                    f"Failed to store data into {table_name}."
+                )
+                return False
+        else:
+            # SQL Databases
+            with session_scope(db_connector.SessionLocal, run_id) as session:
+                df.to_sql(
+                    table_name, con=db_connector.engine, if_exists="append", index=False
+                )
+                session.flush()
+                logger.bind(run_id=run_id).info(f"Stored data into {table_name}.")
+                return True
     except Exception as e:
         logger.bind(run_id=run_id).error(
-            f"Failed to store data into table {table_name}. Error: {e}"
+            f"Failed to store data into {table_name}. Error: {e}"
         )
+        return False
 
 
 def fetch_equity_symbols(country="United States", market="NASDAQ Global Select"):
@@ -57,37 +104,49 @@ def fetch_equity_symbols(country="United States", market="NASDAQ Global Select")
         )
 
 
-def get_new_symbols(list_symbols, engine):
+def get_new_symbols(list_symbols, db_connector):
     try:
-        existing_symbols_query = "SELECT symbol FROM profiles;"
-        existing_symbols = pd.read_sql(existing_symbols_query, con=engine)
-        new_symbols = list(set(list_symbols) - set(existing_symbols["symbol"].tolist()))
+        if db_connector.mongo_db is not None:
+            existing_symbols_cursor = db_connector.mongo_db["profiles"].find(
+                {"symbol": {"$in": list_symbols}}, {"symbol": 1}
+            )
+            existing_symbols_list = [doc["symbol"] for doc in existing_symbols_cursor]
 
+            new_symbols = list(set(list_symbols) - set(existing_symbols_list))
+
+        else:
+            # SQL Databases
+            existing_symbols_query = "SELECT symbol FROM profiles;"
+            existing_symbols = pd.read_sql(
+                existing_symbols_query, con=db_connector.engine
+            )
+
+            new_symbols = list(
+                set(list_symbols) - set(existing_symbols["symbol"].tolist())
+            )
         logger.info(f"Identified {len(new_symbols)} new symbols")
         return new_symbols
     except Exception as e:
         logger.exception(f"Failed to identify new symbols. Error: {e}")
 
 
-def fetch_and_store_profiles(engine, api_key, SessionLocal, run_id):
-    # list_symbols = fetch_equity_symbols()
+def fetch_and_store_profiles(db_connector, api_key, run_id):
     list_symbols = [
         "AAPL",
         "MSFT",
-        "GOOG",
-        "AMZN",
-        "FB",
-        "TSLA",
-        "META",
-        "PYPL",
-        "PLTR",
-        "NIO",
-        "BRK-B",
+        # "FB",
+        # "TSLA",
+        # "META",
+        # "PYPL",
+        # "PLTR",
+        # "NIO",
+        # "BRK-B",
     ]
-    new_symbols = get_new_symbols(list_symbols, engine)
+    new_symbols = get_new_symbols(list_symbols, db_connector)
 
     if new_symbols:
         df_profiles = get_profile(new_symbols, api_key)
+
         if not df_profiles.empty:
             list_cols = [
                 "symbol",
@@ -103,139 +162,261 @@ def fetch_and_store_profiles(engine, api_key, SessionLocal, run_id):
                 "isEtf",
                 "isActivelyTrading",
             ]
-            df_profiles_filtered = df_profiles[list_cols]
+            df_profiles_filtered = df_profiles[list_cols].copy()
             df_profiles_filtered["ipoDate"].replace("", None, inplace=True)
             df_profiles_filtered["cik"].replace("", None, inplace=True)
-            store_to_db(df_profiles_filtered, "profiles", engine, SessionLocal, run_id)
+
+            df_profiles_filtered["ipoDate"] = pd.to_datetime(
+                df_profiles_filtered["ipoDate"], errors="coerce"
+            )
+
+            store_to_db(df_profiles_filtered, "profiles", db_connector, run_id)
         else:
             logger.warning("No profiles found for the new symbols.")
 
 
-def fetch_and_store_financial_statements(engine, api_key, SessionLocal, run_id):
+def get_equity_symbols(db_connector, table_name="equities"):
     try:
-        query = "SELECT DISTINCT symbol FROM cashflows;"
-        existing_symbols_df = pd.read_sql(query, engine)
-        existing_symbols = set(existing_symbols_df["symbol"])
+        if db_connector.mongo_db is not None:
+            # MongoDB operation
 
-        query = "SELECT * FROM profiles;"
-        df_profiles = pd.read_sql(query, engine)
+            # df_equities = db_connector.read_from_mongo(table_name)
+            df_equities = db_connector.mongo_db.profiles.find({})
+            list_symbols = []
+            for df_equitie in df_equities:
+                list_symbols.append(df_equitie["symbol"])
 
-        list_symbols = list(df_profiles["symbol"])
-        list_symbols = [
-            symbol for symbol in list_symbols if symbol not in existing_symbols
-        ]
+        else:
+            # SQL operation
+            query = f"SELECT DISTINCT symbol FROM {table_name};"
+            df_equitie = pd.read_sql(query, con=db_connector.engine)
+            list_symbols = set(df_equitie["symbol"].tolist())
 
-        chunks = [list_symbols[i : i + 100] for i in range(0, len(list_symbols), 100)]
+        return list_symbols
+    except Exception as e:
+        logger.exception(f"Error fetching equity symbols: {e}")
+        return []
 
-        for chunk in chunks:
+
+# def fetch_and_store_financial_statements(db_connector, api_key, run_id):
+#     try:
+#         if db_connector.mongo_db is not None:
+#             existing_symbols_df = []
+
+#         else:
+#             query = "SELECT DISTINCT symbol FROM cashflows;"
+#             existing_symbols_df = pd.read_sql(query, con=db_connector.engine)
+
+#             existing_symbols = set(existing_symbols_df["symbol"])
+
+#         existing_symbols = []
+#         list_symbols = get_equity_symbols(
+#             db_connector,
+#             "profiles",
+#         )  # Assuming this function fetches all equity symbols
+
+#         for symbol in list_symbols:
+#             if symbol not in existing_symbols:
+#                 df, invalid_tickers = get_financial_statements(
+#                     tickers=symbol,
+#                     statement="cashflow",
+#                     api_key=api_key,
+#                     start_date="2000-01-01",
+#                 )
+#                 filtered_df = filter_bigint_range(df, run_id)
+
+#                 print(filtered_df)
+#                 store_to_db(filtered_df, "cashflows", db_connector, run_id)
+
+#         logger.info("Stored financial statements for all symbols.")
+#     except Exception as e:
+#         logger.exception(f"An error occurred while storing financial statements: {e}")
+
+
+def fetch_and_store_financial_statements(db_connector, api_key, run_id):
+    try:
+        existing_symbols = get_equity_symbols(db_connector, "profiles")
+        for symbol in existing_symbols:
             df, invalid_tickers = get_financial_statements(
-                tickers=chunk,
+                tickers=symbol,
                 statement="cashflow",
                 api_key=api_key,
                 start_date="2000-01-01",
             )
-            filtered_df = filter_bigint_range(df, run_id)
+            if not df.empty:
+                # Cast integer fields to int64
+                int64_fields = [
+                    "cik",
+                    "calendarYear",
+                    "deferredIncomeTax",
+                    "inventory",
+                    "accountsPayables",
+                    "otherNonCashItems",
+                    "acquisitionsNet",
+                    "otherInvestingActivites",
+                    "netCashUsedForInvestingActivites",
+                    "debtRepayment",
+                    "commonStockIssued",
+                    "effectOfForexChangesOnCash",
+                    "netChangeInCash",
+                    "commonStockRepurchased",
+                    "dividendsPaid",
+                    "otherFinancingActivites",
+                    "netCashUsedProvidedByFinancingActivities",
+                    "cashAtEndOfPeriod",
+                    "cashAtBeginningOfPeriod",
+                    "operatingCashFlow",
+                    "capitalExpenditure",
+                    "freeCashFlow",
+                ]
 
-            store_to_db(filtered_df, "cashflows", engine, SessionLocal, run_id)
-            logger.info(f"Stored financial statements for {len(chunk)} symbols.")
+                for field in int64_fields:
+                    df[field] = df[field].astype("int64")
+
+                # Convert date fields to datetime
+                date_fields = ["fillingDate", "acceptedDate"]
+                for field in date_fields:
+                    df[field] = pd.to_datetime(df[field])
+
+                filtered_df = filter_bigint_range(df, run_id)
+
+                print(
+                    filtered_df[
+                        ["cik", "acceptedDate", "calendarYear", "freeCashFlow"]
+                    ],
+                )
+
+                # Convert cik and calendarYear to 64-bit integers
+                filtered_df["cik"] = filtered_df["cik"].astype("int64")
+                filtered_df["calendarYear"] = filtered_df["calendarYear"].astype(
+                    "int64"
+                )
+
+                store_to_db(
+                    filtered_df[
+                        ["cik", "acceptedDate", "calendarYear", "freeCashFlow"]
+                    ],
+                    "cashflows",
+                    db_connector,
+                    run_id,
+                )
     except Exception as e:
-        logger.exception(
-            f"An error occurred while fetching and storing financial statements: {e}"
-        )
+        logger.exception(f"An error occurred while storing financial statements: {e}")
 
 
-def fetch_and_store_hist_prices(engine, api_key, SessionLocal, run_id):
+# def fetch_and_store_financial_statements(db_connector, api_key, run_id):
+#     try:
+#         existing_symbols = get_equity_symbols(db_connector, "profiles")
+#         for symbol in existing_symbols:
+#             df, invalid_tickers = get_financial_statements(
+#                 tickers=symbol,
+#                 statement="cashflow",
+#                 api_key=api_key,
+#                 start_date="2000-01-01",
+#             )
+#             if not df.empty:
+#                 # Cast integer fields to int64
+#                 int_fields = [
+#                     "cik",
+#                     "calendarYear",
+#                     "deferredIncomeTax",
+#                     "inventory",
+#                     "accountsPayables",
+#                     "otherNonCashItems",
+#                     "acquisitionsNet",
+#                     "otherInvestingActivites",
+#                     "netCashUsedForInvestingActivites",
+#                     "debtRepayment",
+#                     "commonStockIssued",
+#                     "effectOfForexChangesOnCash",
+#                     "netIncome",
+#                     "depreciationAndAmortization",
+#                     "stockBasedCompensation",
+#                     "changeInWorkingCapital",
+#                     "accountsReceivables",
+#                     "otherWorkingCapital",
+#                     "netCashProvidedByOperatingActivities",
+#                     "investmentsInPropertyPlantAndEquipment",
+#                     "purchasesOfInvestments",
+#                     "salesMaturitiesOfInvestments",
+#                     "commonStockRepurchased",
+#                     "dividendsPaid",
+#                     "otherFinancingActivites",
+#                     "netCashUsedProvidedByFinancingActivities",
+#                     "netChangeInCash",
+#                     "cashAtEndOfPeriod",
+#                     "cashAtBeginningOfPeriod",
+#                     "operatingCashFlow",
+#                     "capitalExpenditure",
+#                     "freeCashFlow",
+#                 ]
+#                 for field in int_fields:
+#                     df[field] = df[field].astype("int64")
+
+#                 # Convert date fields to datetime
+#                 date_fields = ["fillingDate", "acceptedDate"]
+#                 for field in date_fields:
+#                     df[field] = pd.to_datetime(df[field])
+
+#                 filtered_df = filter_bigint_range(df, run_id)
+
+#                 # Convert necessary fields to 'int64'
+#                 int64_fields = [
+#                     "cik",
+#                     "calendarYear",
+#                     "deferredIncomeTax",
+#                     "inventory",
+#                     "accountsPayables",
+#                     "otherNonCashItems",
+#                     "acquisitionsNet",
+#                     "otherInvestingActivites",
+#                     "netCashUsedForInvestingActivites",
+#                     "debtRepayment",
+#                     "commonStockIssued",
+#                     "effectOfForexChangesOnCash",
+#                     # Add other fields that need to be converted to 'int64'
+#                 ]
+#                 for field in int64_fields:
+#                     filtered_df[field] = filtered_df[field].astype("int64")
+
+#                 # Convert date fields to proper datetime objects for MongoDB
+#                 date_fields = ["fillingDate", "acceptedDate"]
+#                 for field in date_fields:
+#                     filtered_df[field] = pd.to_datetime(filtered_df[field])
+
+#                 store_to_db(filtered_df, "cashflows", db_connector, run_id)
+#     except Exception as e:
+#         logger.exception(f"An error occurred while storing financial statements: {e}")
+
+
+def fetch_and_store_hist_prices(db_connector, api_key, run_id, chunk_size=100):
     try:
-        # Initialize API call counter and time
-        api_calls = 0
-        start_time = time.time()
+        list_symbols = get_equity_symbols(db_connector, "hist_prices")
+        for i in range(0, len(list_symbols), chunk_size):
+            chunk_symbols = list_symbols[i : i + chunk_size]
+            for symbol in chunk_symbols:
+                df = get_historical_prices(symbol, api_key)
+                filtered_df = filter_bigint_range(df, run_id)
+                store_to_db(filtered_df, "hist_prices", db_connector, run_id)
 
-        # Fetch existing symbols from the database
-        query = "SELECT DISTINCT symbol FROM hist_prices;"
-        existing_symbols_df = pd.read_sql(query, engine)
-        existing_symbols = set(existing_symbols_df["symbol"])
-
-        query = "SELECT * FROM profiles;"
-        df_profiles = pd.read_sql(query, engine)
-
-        list_symbols = list(df_profiles["symbol"])
-        list_symbols = [
-            symbol for symbol in list_symbols if symbol not in existing_symbols
-        ]
-
-        # Chunk the list of symbols
-        chunks = [list_symbols[i : i + 100] for i in range(0, len(list_symbols), 100)]
-
-        for chunk in chunks:
-            df = get_historical_prices(chunk, [], api_key, "2000-01-01", "2023-10-17")
-            filtered_df = filter_bigint_range(df, run_id)
-
-            store_to_db(filtered_df, "hist_prices", engine, SessionLocal, run_id)
-            logger.info(f"Stored historical prices for {len(chunk)} symbols.")
-
-            # Increment API call counter
-            api_calls += len(chunk)
-
-            # Rate-limit check
-            if api_calls >= 290:
-                elapsed_time = time.time() - start_time
-                if elapsed_time < 60:
-                    sleep_time = 60 - elapsed_time
-                    time.sleep(sleep_time)
-
-                # Reset counter and time
-                api_calls = 0
-                start_time = time.time()
-
+        logger.info("Stored historical prices for all symbols.")
     except Exception as e:
         logger.exception(
             f"An error occurred while fetching and storing historical prices: {e}"
         )
 
 
-def fetch_and_store_market_cap_data(engine, api_key, SessionLocal, run_id):
+def fetch_and_store_market_cap_data(db_connector, api_key, run_id, chunk_size=100):
     try:
-        # Initialize API call counter and time
-        api_calls = 0
-        start_time = time.time()
+        list_symbols = get_equity_symbols(db_connector, "market_cap_data")
+        for i in range(0, len(list_symbols), chunk_size):
+            chunk_symbols = list_symbols[i : i + chunk_size]
+            for symbol in chunk_symbols:
+                df = get_historical_market_cap(symbol, api_key)
+                filtered_df = filter_bigint_range(df, run_id)
+                store_to_db(filtered_df, "hist_marketcap", db_connector, run_id)
 
-        # Fetch existing symbols from the database
-        query = "SELECT DISTINCT symbol FROM hist_marketcap;"
-        existing_symbols_df = pd.read_sql(query, engine)
-        existing_symbols = set(existing_symbols_df["symbol"])
-
-        query = "SELECT * FROM profiles;"
-        df_profiles = pd.read_sql(query, engine)
-
-        list_symbols = list(df_profiles["symbol"])
-        list_symbols = [
-            symbol for symbol in list_symbols if symbol not in existing_symbols
-        ]
-
-        # Chunk the list of symbols
-        chunks = [list_symbols[i : i + 100] for i in range(0, len(list_symbols), 100)]
-
-        for chunk in chunks:
-            df = get_historical_market_cap(chunk, api_key, "2000-01-01")
-            filtered_df = filter_bigint_range(df, run_id)
-
-            store_to_db(filtered_df, "hist_marketcap", engine, SessionLocal, run_id)
-            logger.info(f"Stored historical market cap data for {len(chunk)} symbols.")
-
-            # Increment API call counter
-            api_calls += len(chunk)
-
-            # Rate-limit check
-            if api_calls >= 290:
-                elapsed_time = time.time() - start_time
-                if elapsed_time < 60:
-                    sleep_time = 60 - elapsed_time
-                    time.sleep(sleep_time)
-
-                # Reset counter and time
-                api_calls = 0
-                start_time = time.time()
-
+        logger.info("Stored market cap data for all symbols.")
     except Exception as e:
         logger.exception(
             f"An error occurred while fetching and storing market cap data: {e}"
