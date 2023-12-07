@@ -1,76 +1,41 @@
-# run.py
-
-# Import necessary libraries
-from datetime import datetime
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 from loguru import logger
-import sys
+from utils.utils_logger import configure_logger
 
-# Import custom modules
-from data_storage.db_connector import DBConnector
-
-from fetch_data.fetch_equities import (
-    fetch_and_store_profiles,
-    fetch_and_store_financial_statements,
-    fetch_and_store_hist_prices,
-    fetch_and_store_market_cap_data,
+from data_ingestion.db_connector import DBConnector
+from data_ingestion.api_financial_modeling_prep.fetch_financial_statement import (
+    fetch_and_store_data,
 )
-from data_storage.models_mongo import (
-    create_profiles_collection,
-    create_cashflows_collection,
-)
-
-
-def configure_logger():
-    """
-    Configure the Loguru logger settings.
-    """
-    logger.remove()
-    logger.add(
-        lambda msg: sys.stderr.write(msg),
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {function}:{line} - {message}",
-    )
-    logger.add(
-        "./logs/data_pipeline.log", rotation="1 day", level="INFO", serialize=True
-    )
 
 
 def main():
     load_dotenv()
-    configure_logger()
 
-    run_id = datetime.now().strftime("%Y/%m/%d_%H:%M:%S")
-    FMP_API_KEY = os.getenv("FMP_SECRET_KEY")
-    db_type = os.getenv("DB_TYPE", "LOCAL")
+    FMP_SECRET_KEY = os.getenv("FMP_SECRET_KEY")
 
-    # Initialize DB Connector based on the type
-    print(f"Connecting to DB: {db_type}")
-    db_connector = DBConnector()
-
-    db_connector.initialize_db(db_type)
-
-    common_args = {
-        "db_connector": db_connector,
-        "api_key": FMP_API_KEY,
-        "run_id": run_id,
+    config_params = {
+        "period": "quarter",
+        "apikey": FMP_SECRET_KEY,
+        "limit": 20,
+        "batch_size": 10,
+        "base_url": "https://financialmodelingprep.com/api/v3",
+        "store_data": True,
     }
+    # Data tables and symbols
+    dict_tables = {
+        "income-statement": "income_statement",
+        "balance-sheet-statement": "balance_sheet_statement",
+        "cash-flow-statement": "cash_flow_statement",
+    }
+    symbols = ["AAPL", "MSFT", "GOOG", "TSLA"]
 
-    try:
-        logger.bind(run_id=run_id).info("Starting data pipeline")
-        db_uri = os.getenv("MONGO_URI")
-        db_name = os.getenv("MONGO_DB_NAME")
-        create_profiles_collection(db_uri, db_name)
+    # Initialize DBConnector
+    db = DBConnector()
+    db.initialize_db("MONGO")
 
-        create_cashflows_collection(db_uri, db_name)
-
-        fetch_and_store_profiles(**common_args)
-        fetch_and_store_financial_statements(**common_args)
-        # fetch_and_store_hist_prices(**common_args)
-        # fetch_and_store_market_cap_data(**common_args)
-
-    except Exception as e:
-        logger.bind(run_id=run_id).exception("An error occurred: {}", e)
+    df = fetch_and_store_data(symbols, dict_tables, config_params, db)
 
 
 if __name__ == "__main__":

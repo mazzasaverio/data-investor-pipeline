@@ -63,7 +63,9 @@ class DBConnector:
             records = df.to_dicts()
             collection = self.mongo_db[collection_name]
             result = collection.insert_many(records)
-            logger.info(f"Inserted document IDs: {result.inserted_ids}")
+            logger.info(
+                f"collection_name: {collection_name} - Inserted document IDs: {result.inserted_ids}"
+            )
         except Exception as e:
             logger.error(f"Failed to write to MongoDB. Error: {e}")
 

@@ -1,132 +1,25 @@
 /home/sam/github/data-investor-pipeline
-├── archive
-│   ├── 1_data_ingestion.ipynb
-│   ├── custom_tree_and_files_corrected.txt
-│   ├── __init__.py
-│   ├── parse_api_fmp.ipynb
-│   ├── read_data.ipynb
-│   └── repo_utils_scripts
-│       └── print_tree_and_files_script.py
-├── common
-│   ├── constants.py
-│   └── __init__.py
+├── code_report.py
 ├── config
 ├── custom_tree_and_files_corrected.txt
-├── database
-│   ├── db_connector.py
-│   ├── __init__.py
-│   ├── models_mongo.py
-│   └── models.py
 ├── .env
 ├── .env.example
-├── fetch_data
-│   └── fetch_equities.py
 ├── .gitignore
-├── investorkit
-│   ├── environment.yml
-│   ├── .gitignore
-│   ├── __init__.py
-│   ├── investorkit
-│   │   ├── get_data
-│   │   │   ├── base.py
-│   │   │   └── __init__.py
-│   │   └── __init__.py
-│   ├── LICENSE
-│   ├── README.md
-│   └── requirements.txt
+├── intestion_data_fmp.ipynb
 ├── LICENSE
-├── logs
-│   ├── data_pipeline.2023-12-02_17-59-24_706713.log
-│   ├── data_pipeline.2023-12-03_23-53-47_474632.log
-│   └── data_pipeline.log
 ├── README.md
-├── run.py
-├── setup_db.py
-├── test_2.py
-├── test.py
-├── tree_code_report.py
-├── utils
-│   ├── context_manager.py
-│   └── process_data.py
+├── src
+│   ├── data_ingestion
+│   │   ├── db_connector.py
+│   │   └── __init__.py
+│   ├── run.py
+│   └── utils
+│       ├── utils_data.py
+│       └── utils_logger.py
 └── .vscode
     └── tasks.json
 
-13 directories, 39 files
-
-
-=== Content of /home/sam/github/data-investor-pipeline/test_2.py ===
-
-# Import necessary libraries
-import os
-import pandas as pd
-from pymongo import MongoClient
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
-
-# Connect to MongoDB
-client = MongoClient(MONGO_URI)
-db = client[MONGO_DB_NAME]
-
-
-# Function to create a collection with optional validator
-def create_profiles2_collection(db, collection_name, validator=None):
-    if collection_name not in db.list_collection_names():
-        if validator:
-            db.create_collection(collection_name, validator=validator)
-        else:
-            db.create_collection(collection_name)
-    else:
-        print(f"Collection '{collection_name}' already exists.")
-
-
-# Function to insert data into MongoDB
-def insert_data_to_mongo(db, collection_name, data_frame):
-    collection = db[collection_name]
-    records = data_frame.to_dict(orient="records")
-    collection.insert_many(records)
-
-
-# Sample DataFrame
-data = {
-    "symbol": ["AAPL", "MSFT"],
-    "companyName": ["Apple Inc.", "Microsoft Corporation"],
-    "cik": [320193, 789019],
-    # Add other fields as necessary
-}
-df = pd.DataFrame(data)
-
-# Create collection and insert data
-create_profiles2_collection(db, "profiles2")  # Create collection if it doesn't exist
-insert_data_to_mongo(db, "profiles2", df)  # Insert data
-
-# Verify the inserted data
-profiles2_collection = db["profiles2"]
-documents = profiles2_collection.find({})
-for doc in documents:
-    print(doc)
-
-
-=== Content of /home/sam/github/data-investor-pipeline/setup_db.py ===
-
-from sqlalchemy import create_engine
-from database.models import Base
-import os
-
-
-def setup_database(engine):
-    Base.metadata.create_all(bind=engine)
-
-
-if __name__ == "__main__":
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    print(DATABASE_URL)
-    engine = create_engine(DATABASE_URL, connect_args={"ssl": {"ssl-mode": "REQUIRED"}})
-
-    setup_database(engine)
+6 directories, 14 files
 
 
 === Content of /home/sam/github/data-investor-pipeline/.env.example ===
@@ -150,11 +43,11 @@ MONGO_URI=
 MONGO_DB_NAME=
 ```
 
-=== Content of /home/sam/github/data-investor-pipeline/tree_code_report.py ===
+=== Content of /home/sam/github/data-investor-pipeline/code_report.py ===
 
 Code present but not reported for space reasons
 
-=== Content of /home/sam/github/data-investor-pipeline/run.py ===
+=== Content of /home/sam/github/data-investor-pipeline/src/run.py ===
 
 # run.py
 
@@ -166,7 +59,7 @@ from loguru import logger
 import sys
 
 # Import custom modules
-from database.db_connector import DBConnector
+from data_ingestion.db_connector import DBConnector
 
 from fetch_data.fetch_equities import (
     fetch_and_store_profiles,
@@ -174,7 +67,7 @@ from fetch_data.fetch_equities import (
     fetch_and_store_hist_prices,
     fetch_and_store_market_cap_data,
 )
-from database.models_mongo import (
+from data_storage.models_mongo import (
     create_profiles_collection,
     create_cashflows_collection,
 )
@@ -235,132 +128,31 @@ if __name__ == "__main__":
     main()
 
 
-=== Content of /home/sam/github/data-investor-pipeline/test.py ===
+=== Content of /home/sam/github/data-investor-pipeline/src/utils/utils_logger.py ===
 
-from database.db_session import initialize_db
-import os
-import pandas as pd
-from database.models_mongo import create_profiles_collection
-
-db_type = os.getenv("DB_TYPE", "LOCAL")
-db_uri = os.getenv("MONGO_URI")
-db_name = os.getenv("MONGO_DB_NAME")
-
-# Initialize DB Connector based on the type
-db_connector = initialize_db(db_type)
+import sys
 
 
-profiles_collection = create_profiles_collection(db_uri, db_name)
-
-
-data = {
-    "symbol": ["AAPL", "MSFT"],
-    "companyName": ["Apple Inc.", "Microsoft Corporation"],
-    "cik": [320193, 789019],
-    "exchange": ["NASDAQ", "NASDAQ"],
-    "exchangeShortName": ["NASDAQ", "NASDAQ"],
-    "industry": ["Consumer Electronics", "Software"],
-    "sector": ["Technology", "Technology"],
-    "country": ["United States", "United States"],
-    "ipoDate": [pd.to_datetime("1980-12-12"), pd.to_datetime("1986-03-13")],
-    "defaultImage": [False, False],
-    "isEtf": [False, False],
-    "isActivelyTrading": [True, True],
-}
-
-df = pd.DataFrame(data)
-
-
-# Convert DataFrame to a list of dictionaries
-records = df.to_dict(orient="records")
-
-profiles_collection = db_connector.profiles
-
-# Insert the documents
-result = profiles_collection.insert_many(records)
-print("Inserted document IDs:", result.inserted_ids)
-
-profiles_collection = db_connector["profiles"]
-documents = profiles_collection.find({})
-for doc in documents:
-    print(doc)
-
-
-=== Content of /home/sam/github/data-investor-pipeline/utils/process_data.py ===
-
-import numpy as np
-import pandas as pd
-from common.constants import MIN_BIGINT, MAX_BIGINT
 from loguru import logger
 
 
-def filter_bigint_range(df: pd.DataFrame, run_id) -> pd.DataFrame:
-    try:
-        min_bigint, max_bigint = MIN_BIGINT, MAX_BIGINT
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-
-        for col in numeric_cols:
-            df = df.query(f"{min_bigint} <= {col} <= {max_bigint}")
-
-        logger.bind(run_id=run_id).info(
-            f"Filtered DataFrame based on the bigint range."
-        )
-        return df
-    except Exception as e:
-        logger.bind(run_id=run_id).exception(
-            f"An error occurred while filtering DataFrame: {e}"
-        )
-        return pd.DataFrame()
+def configure_logger():
+    """
+    Configure the Loguru logger settings.
+    """
+    logger.remove()
+    logger.add(
+        lambda msg: sys.stderr.write(msg),
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {function}:{line} - {message}",
+    )
+    logger.add(
+        "./logs/data_pipeline.log", rotation="1 day", level="INFO", serialize=True
+    )
 
 
-=== Content of /home/sam/github/data-investor-pipeline/utils/context_manager.py ===
+=== Content of /home/sam/github/data-investor-pipeline/src/utils/utils_data.py ===
 
-from contextlib import contextmanager
-from sqlalchemy.orm import sessionmaker
-from loguru import logger
-
-
-@contextmanager
-def session_scope(SessionLocal, run_id):
-    """Provide a transactional scope around a series of operations."""
-    session = SessionLocal()
-    try:
-        yield session
-        session.commit()
-        logger.bind(run_id=run_id).info("Session committed successfully.")
-    except Exception as e:
-        session.rollback()
-        logger.bind(run_id=run_id).exception(f"An error occurred: {e}")
-    finally:
-        session.close()
-
-
-=== Content of /home/sam/github/data-investor-pipeline/investorkit/investorkit/get_data/base.py ===
-
-from typing import Union, List, Tuple
-import pandas as pd
-import numpy as np
-from loguru import logger  # Using Loguru for logging
-
-try:
-    from tqdm import tqdm
-
-    ENABLE_TQDM = True
-except ImportError:
-    ENABLE_TQDM = False
-
-
-### Useful for debug
-# tickers=list(df['symbol'])
-# statement="cashflow"
-# api_key=FMP_API_KEY
-# quarter = True
-# start_date="2000-01-01"
-# end_date=None
-# rounding = 4
-# progr
 from urllib.request import urlopen
-
 
 import certifi
 import json
@@ -372,481 +164,15 @@ def get_jsonparsed_data(url):
     return json.loads(data)
 
 
-def get_financial_statements(
-    tickers: Union[str, List[str]],
-    statement: str = "",
-    api_key: str = "",
-    quarter: bool = True,
-    start_date: Union[str, None] = None,
-    end_date: Union[str, None] = None,
-    rounding: Union[int, None] = 4,
-    progress_bar: bool = True,
-) -> Tuple[pd.DataFrame, List[str]]:
-    if not isinstance(tickers, (list, str)):
-        raise ValueError(f"Invalid type for tickers: {type(tickers)}")
+=== Content of /home/sam/github/data-investor-pipeline/src/data_ingestion/db_connector.py ===
 
-    ticker_list = tickers if isinstance(tickers, list) else [tickers]
-
-    statement_to_location = {
-        "balance": "balance-sheet-statement",
-        "income": "income-statement",
-        "cashflow": "cash-flow-statement",
-    }
-
-    location = statement_to_location.get(statement)
-    if location is None:
-        raise ValueError(
-            "Invalid statement type. Choose 'balance', 'income', or 'cashflow'."
-        )
-
-    period = "quarter" if quarter else "annual"
-    financial_statement_dict = {}
-    invalid_tickers = []
-
-    ticker_iterator = (
-        tqdm(ticker_list, desc=f"Obtaining {statement} data")
-        if ENABLE_TQDM & progress_bar
-        else ticker_list
-    )
-
-    for ticker in ticker_iterator:
-        print(location, ticker, period)
-        # url = f"https://financialmodelingprep.com/api/v3/{location}/{ticker}?period={period}?apikey={api_key}'"
-
-        url = f"https://financialmodelingprep.com/api/v3/{location}/{ticker}?period={period}&apikey={api_key}"
-
-        try:
-            financial_statement = pd.read_json(url)
-            if financial_statement.empty:
-                invalid_tickers.append(ticker)
-                continue
-        except Exception as error:
-            invalid_tickers.append(ticker)
-            continue
-
-        date_col = "date" if quarter else "calendarYear"
-        freq = "Q" if quarter else "Y"
-        financial_statement[date_col] = pd.to_datetime(
-            financial_statement[date_col].astype(str)
-        ).dt.to_period(freq)
-
-        financial_statement_dict[ticker] = financial_statement
-
-    if not financial_statement_dict:
-        return pd.DataFrame(), invalid_tickers
-
-    financial_statement_total = pd.concat(financial_statement_dict)
-    financial_statement_total.reset_index(drop=True, inplace=True)
-    financial_statement_total = financial_statement_total.drop_duplicates().reset_index(
-        drop=True
-    )
-
-    if start_date or end_date:
-        mask = True
-        if start_date:
-            mask &= financial_statement_total["date"] >= start_date
-        if end_date:
-            mask &= financial_statement_total["date"] <= end_date
-        financial_statement_total = financial_statement_total[mask]
-
-    financial_statement_total["date"] = financial_statement_total["date"].astype(str)
-
-    financial_statement_total["fillingDate"] = pd.to_datetime(
-        financial_statement_total["fillingDate"]
-    )
-    financial_statement_total["acceptedDate"] = pd.to_datetime(
-        financial_statement_total["acceptedDate"]
-    )
-    financial_statement_total["cik"] = financial_statement_total["cik"].astype(
-        "int64"
-    )  # Convert cik to int64 (MongoDB long)
-    financial_statement_total["calendarYear"] = financial_statement_total[
-        "calendarYear"
-    ].astype("int64")
-
-    int_fields = [
-        "cik",
-        "calendarYear",
-        "deferredIncomeTax",
-        "inventory",
-        "accountsPayables",
-        "otherNonCashItems",
-        "acquisitionsNet",
-        "otherInvestingActivites",
-        "netCashUsedForInvestingActivites",
-        "debtRepayment",
-        "commonStockIssued",
-        "effectOfForexChangesOnCash",
-    ]
-    for field in int_fields:
-        financial_statement_total[field] = financial_statement_total[field].astype(
-            "int64"
-        )
-
-    # Ensuring that date fields are proper datetime objects
-    date_fields = ["fillingDate", "acceptedDate"]
-    for field in date_fields:
-        financial_statement_total[field] = pd.to_datetime(
-            financial_statement_total[field]
-        )
-
-    int64_fields = [
-        "cik",
-        "calendarYear",
-        "deferredIncomeTax",
-        "inventory",
-        "accountsPayables",
-        "otherNonCashItems",
-        "acquisitionsNet",
-        "otherInvestingActivites",
-        "netCashUsedForInvestingActivites",
-        "debtRepayment",
-        "commonStockIssued",
-        "effectOfForexChangesOnCash",
-        "netChangeInCash",
-        "commonStockRepurchased",
-        "dividendsPaid",
-        "otherFinancingActivites",
-        "netCashUsedProvidedByFinancingActivities",
-        "cashAtEndOfPeriod",
-        "cashAtBeginningOfPeriod",
-        "operatingCashFlow",
-        "capitalExpenditure",
-        "freeCashFlow",
-    ]
-    for field in int64_fields:
-        financial_statement_total[field] = financial_statement_total[field].astype(
-            "int64"
-        )
-
-    # Convert to proper date objects
-    date_fields = ["fillingDate", "acceptedDate"]
-    for field in date_fields:
-        financial_statement_total[field] = pd.to_datetime(
-            financial_statement_total[field]
-        )
-
-    return financial_statement_total, invalid_tickers
-
-
-import time
-
-
-def get_profile(tickers, api_key, max_retries=3, delay=1):
-    if not isinstance(tickers, (list, str)):
-        raise ValueError(f"Type for the tickers ({type(tickers)}) variable is invalid.")
-
-    tickers = tickers if isinstance(tickers, list) else [tickers]
-    profiles = {}
-
-    for ticker in tqdm(tickers):
-        retries = 0
-
-        while retries < max_retries:
-            try:
-                print(f"Fetching data for {ticker}, attempt {retries + 1}...")
-                # time.sleep(delay)
-                data = pd.read_json(
-                    f"https://financialmodelingprep.com/api/v3/profile/{ticker}?apikey={api_key}"
-                )
-                profiles[ticker] = data
-                break  # Break out of the retry loop on success
-            except Exception as error:
-                logger.warning(
-                    f"Attempt {retries + 1} failed for {ticker}. Error: {error}"
-                )
-                retries += 1
-                # time.sleep(delay)  # Wait before retrying
-
-        if retries == max_retries:
-            logger.error(f"Max retries reached for {ticker}. Moving on to next ticker.")
-
-    if profiles:
-        profile_dataframe = pd.concat(profiles)
-        profile_dataframe = profile_dataframe.reset_index(drop=True)
-        return profile_dataframe
-    else:
-        return pd.DataFrame()  # return an empty DataFrame if no profiles were fetched
-
-
-def get_historical_market_cap(
-    tickers: Union[str, List[str]],
-    api_key: str = "",
-    start_date: Union[str, None] = None,
-) -> pd.DataFrame:
-    if not isinstance(tickers, (list, str)):
-        raise ValueError(f"Invalid type for tickers: {type(tickers)}")
-
-    ticker_list = tickers if isinstance(tickers, list) else [tickers]
-    df_marketcap = pd.DataFrame()
-
-    for ticker in ticker_list:
-        url = f"https://financialmodelingprep.com/api/v3/historical-market-capitalization/{ticker}?&apikey={api_key}"
-        try:
-            data_mod = pd.read_json(url)
-            if data_mod.empty:
-                continue
-
-            data_mod["date"] = pd.to_datetime(data_mod["date"])
-
-            if start_date:
-                start_date_dt = pd.to_datetime(start_date)
-                data_mod = data_mod[data_mod["date"] > start_date_dt]
-
-            df_marketcap = pd.concat([df_marketcap, data_mod], ignore_index=True)
-        except Exception as error:
-            logger.warning(f"Could not fetch data for {ticker}. Error: {error}")
-
-    return df_marketcap
-
-
-def get_historical_prices(
-    tickers: List[str],
-    new_tickers: List[str],
-    api_key: str,
-    start_date: str,
-    end_date: str,
-) -> pd.DataFrame:
-    df_final_price = pd.DataFrame()
-
-    ticker_iterator = tqdm(tickers)
-    for ticker in ticker_iterator:
-        base_url = "https://financialmodelingprep.com/api/v3/historical-price-full/"
-        if ticker not in new_tickers:
-            url = f"{base_url}{ticker}?from={start_date}&to={end_date}&apikey={api_key}"
-        else:
-            url = f"{base_url}{ticker}?from=2000-01-01&to={end_date}&apikey={api_key}"
-
-        try:
-            df_price = pd.read_json(url)
-            if "historical" in df_price.columns:
-                exploded_df = df_price["historical"].apply(pd.Series)
-                final_df = pd.concat([df_price["symbol"], exploded_df], axis=1)
-                df_final_price = pd.concat(
-                    [df_final_price, final_df], ignore_index=True
-                )
-
-        except Exception as e:
-            logger.warning(f"Could not fetch data for {ticker}. Error: {e}")
-
-    logger.info(f"Shape of historical prices DataFrame: {df_final_price.shape}")
-
-    df_final_price["date"] = pd.to_datetime(df_final_price["date"])
-
-    return df_final_price
-
-
-=== Content of /home/sam/github/data-investor-pipeline/database/models_mongo.py ===
-
+import os
+import polars as pl
 from pymongo import MongoClient
-
-
-def create_cashflows_collection(db_uri, db_name):
-    client = MongoClient(db_uri)
-    db = client[db_name]
-    validator = {
-        "$jsonSchema": {
-            "bsonType": "object",
-            "required": ["cik", "acceptedDate", "calendarYear", "freeCashFlow"],
-            "properties": {
-                "cik": {"bsonType": "long"},
-                "acceptedDate": {"bsonType": "date"},
-                "calendarYear": {"bsonType": "long"},
-                "freeCashFlow": {"bsonType": "long"},
-            },
-        }
-    }
-
-    # Drop the existing collection if it's okay to lose the data
-    db.drop_collection("cashflows")
-
-    # Recreate the collection with the new validator
-    db.create_collection("cashflows", validator=validator)
-    db.command("collMod", "cashflows", validator=validator)
-
-    return db["cashflows"]
-
-
-def create_profiles_collection(db_uri, db_name):
-    client = MongoClient(db_uri)
-    db = client[db_name]
-
-    validator = {
-        "$jsonSchema": {
-            "bsonType": "object",
-            "required": [
-                "symbol",
-                "companyName",
-                "cik",
-                "exchange",
-                "exchangeShortName",
-                "industry",
-                "sector",
-                "country",
-                "ipoDate",
-                "defaultImage",
-                "isEtf",
-                "isActivelyTrading",
-            ],
-            "properties": {
-                "symbol": {"bsonType": "string"},
-                "companyName": {"bsonType": "string"},
-                "cik": {"bsonType": "int"},
-                "exchange": {"bsonType": "string"},
-                "exchangeShortName": {"bsonType": "string"},
-                "industry": {"bsonType": "string"},
-                "sector": {"bsonType": "string"},
-                "country": {"bsonType": "string"},
-                "ipoDate": {"bsonType": "date"},
-                "defaultImage": {"bsonType": "bool"},
-                "isEtf": {"bsonType": "bool"},
-                "isActivelyTrading": {"bsonType": "bool"},
-            },
-        }
-    }
-
-    # Controlla se la collezione esiste già
-    if "profiles" not in db.list_collection_names():
-        db.create_collection("profiles")
-        db.command("collMod", "profiles", validator=validator)
-    else:
-        print("La collezione 'profiles' esiste già.")
-
-    # Aggiungi il validator dopo aver creato la collezione
-    db.command("collMod", "profiles", validator=validator)
-
-    return db["profiles"]
-
-
-=== Content of /home/sam/github/data-investor-pipeline/database/models.py ===
-
-from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Boolean,
-    Date,
-    Sequence,
-    BigInteger,
-    DateTime,
-)
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
-
-
-# SQLAlchemy Models
-class Profile(Base):
-    __tablename__ = "profiles"
-    symbol = Column(String(255), primary_key=True, index=True)
-    companyName = Column(String(255))
-    cik = Column(Integer)
-    exchange = Column(String(255))
-    exchangeShortName = Column(String(255))
-    industry = Column(String(255))
-    sector = Column(String(255))
-    country = Column(String(255))
-    ipoDate = Column(Date)
-    defaultImage = Column(Boolean)
-    isEtf = Column(Boolean)
-    isActivelyTrading = Column(Boolean)
-
-
-class CashFlow(Base):
-    __tablename__ = "cashflows"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    date = Column(String(255))  # Representing period[Q-DEC] as String(255)
-    symbol = Column(String(255), index=True)
-    reportedCurrency = Column(String(255))
-    cik = Column(BigInteger)
-    fillingDate = Column(Date)
-    acceptedDate = Column(Date)
-    calendarYear = Column(BigInteger)
-    period = Column(String(255))
-
-    # Columns changed from Integer to BigInteger
-    netIncome = Column(BigInteger)
-    depreciationAndAmortization = Column(BigInteger)
-    deferredIncomeTax = Column(BigInteger)
-    stockBasedCompensation = Column(BigInteger)
-    changeInWorkingCapital = Column(BigInteger)
-    accountsReceivables = Column(BigInteger)
-    inventory = Column(BigInteger)
-    accountsPayables = Column(BigInteger)
-    otherWorkingCapital = Column(BigInteger)
-    otherNonCashItems = Column(BigInteger)
-    netCashProvidedByOperatingActivities = Column(BigInteger)
-    investmentsInPropertyPlantAndEquipment = Column(BigInteger)
-    acquisitionsNet = Column(BigInteger)
-    purchasesOfInvestments = Column(BigInteger)
-    salesMaturitiesOfInvestments = Column(BigInteger)
-    otherInvestingActivites = Column(BigInteger)
-    netCashUsedForInvestingActivites = Column(BigInteger)
-    debtRepayment = Column(BigInteger)
-    commonStockIssued = Column(BigInteger)
-    commonStockRepurchased = Column(BigInteger)
-    dividendsPaid = Column(BigInteger)
-    otherFinancingActivites = Column(BigInteger)
-    netCashUsedProvidedByFinancingActivities = Column(BigInteger)
-    effectOfForexChangesOnCash = Column(BigInteger)
-    netChangeInCash = Column(BigInteger)
-    cashAtEndOfPeriod = Column(BigInteger)
-    cashAtBeginningOfPeriod = Column(BigInteger)
-    operatingCashFlow = Column(BigInteger)
-    capitalExpenditure = Column(BigInteger)
-    freeCashFlow = Column(BigInteger)
-
-    link = Column(String(255))
-    finalLink = Column(String(255))
-
-
-# New model to represent the DataFrame
-class MarketCapData(Base):
-    __tablename__ = "hist_marketcap"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    symbol = Column(String(255), index=True)
-    date = Column(DateTime)
-    marketCap = Column(BigInteger)
-
-
-from sqlalchemy import Float
-
-
-# New model to represent the DataFrame with trading data
-class HistPrice(Base):
-    __tablename__ = "hist_prices"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    symbol = Column(String(255), index=True)
-    date = Column(DateTime)
-    open = Column(Float)
-    high = Column(Float)
-    low = Column(Float)
-    close = Column(Float)
-    adjClose = Column(Float)
-    volume = Column(BigInteger)
-    unadjustedVolume = Column(BigInteger)
-    change = Column(Float)
-    changePercent = Column(Float)
-    vwap = Column(Float)
-    label = Column(String(255))
-    changeOverTime = Column(Float)
-
-
-=== Content of /home/sam/github/data-investor-pipeline/database/db_connector.py ===
-
-# db_connector.py
-
+from pymongo.server_api import ServerApi
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
-import os
-import pandas as pd
+from loguru import logger
 
 
 class DBConnector:
@@ -856,496 +182,85 @@ class DBConnector:
         self.mongo_client = None
         self.mongo_db = None
 
-    def connect_sqlalchemy(self, db_url, connect_args={}):
+    def connect_sqlalchemy(self, db_url, connect_args=None):
+        if connect_args is None:
+            connect_args = {}
         try:
             self.engine = create_engine(db_url, connect_args=connect_args)
             self.SessionLocal = sessionmaker(autoflush=False, bind=self.engine)
-
         except Exception as e:
-            # Handle exceptions and logging
-            pass
+            logger.error(f"SQLAlchemy connection error: {e}")
 
     def connect_mongodb(self, uri, db_name):
         try:
             self.mongo_client = MongoClient(uri, server_api=ServerApi("1"))
             self.mongo_db = self.mongo_client[db_name]
-
             self.mongo_client.admin.command("ping")
-            print("Pinged your deployment. You successfully connected to MongoDB!")
-
+            logger.info("Successfully connected to MongoDB")
         except Exception as e:
-            # Handle exceptions and logging
-            pass
+            logger.error(f"MongoDB connection error: {e}")
 
     def initialize_db(self, connection_type):
         if connection_type == "PLANETSCALE":
-            db_url = f"mysql+pymysql://{os.getenv('DB_USERNAME')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
+            db_url = self.build_mysql_url()
             ssl_args = {"ssl": {"ca": "/etc/ssl/certs/ca-certificates.crt"}}
-
-            return self.connect_sqlalchemy(db_url, ssl_args)
+            self.connect_sqlalchemy(db_url, ssl_args)
 
         elif connection_type == "LOCAL":
-            db_url = f"postgresql://{os.getenv('DB_USERNAME_LOCAL')}:{os.getenv('DB_PASSWORD_LOCAL')}@{os.getenv('DB_HOST_LOCAL')}/{os.getenv('DB_NAME_LOCAL')}"
-
-            return self.connect_sqlalchemy(db_url)
+            db_url = self.build_postgres_url()
+            self.connect_sqlalchemy(db_url)
 
         elif connection_type == "MONGO":
             mongo_uri = os.getenv("MONGO_URI")
             mongo_db_name = os.getenv("MONGO_DB_NAME")
-            return self.connect_mongodb(mongo_uri, mongo_db_name)
+            self.connect_mongodb(mongo_uri, mongo_db_name)
 
         else:
             raise ValueError("Invalid connection type specified")
 
+    @staticmethod
+    def build_mysql_url():
+        return f"mysql+pymysql://{os.getenv('DB_USERNAME')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
+
+    @staticmethod
+    def build_postgres_url():
+        return f"postgresql://{os.getenv('DB_USERNAME_LOCAL')}:{os.getenv('DB_PASSWORD_LOCAL')}@{os.getenv('DB_HOST_LOCAL')}/{os.getenv('DB_NAME_LOCAL')}"
+
     def write_to_mongo(self, collection_name, df):
         try:
-            records = df.to_dict(orient="records")
-
-            collection = self.mongo_client[collection_name]
+            records = df.to_dicts()
+            collection = self.mongo_db[collection_name]
             result = collection.insert_many(records)
-            print("Inserted document IDs:", result.inserted_ids)
+            logger.info(f"Inserted document IDs: {result.inserted_ids}")
         except Exception as e:
-            print(f"Failed to write to MongoDB. Error: {e}")
+            logger.error(f"Failed to write to MongoDB. Error: {e}")
 
-    def read_from_mongo(self, collection_name, query={}):
+    def read_from_mongo(self, collection_name, query=None):
+        if query is None:
+            query = {}
         try:
-            collection = self.mongo_client[collection_name]
-
-            data = pd.DataFrame(list(collection.find({})))
-            return data
+            collection = self.mongo_db[collection_name]
+            data = list(collection.find(query))
+            return pl.DataFrame(data)
         except Exception as e:
-            # Handle exceptions and logging
-            return pd.DataFrame()
+            logger.error(f"Failed to read from MongoDB. Error: {e}")
+            return pl.DataFrame()
+
+    def create_collection(self, db_uri, db_name, collection_name, validator=None):
+        if validator is None:
+            validator = {}
+        try:
+            client = MongoClient(db_uri)
+            db = client[db_name]
+            db.create_collection(collection_name, validator=validator)
+            db.command("collMod", collection_name, validator=validator)
+        except Exception as e:
+            logger.error(f"Error creating collection: {e}")
 
 
-=== Content of /home/sam/github/data-investor-pipeline/common/constants.py ===
-
-MIN_BIGINT = -9223372036854775808
-MAX_BIGINT = 9223372036854775807
-
-
-=== Content of /home/sam/github/data-investor-pipeline/fetch_data/fetch_equities.py ===
-
-import financedatabase as fd
-import time
-
-from investorkit.investorkit.get_data.base import (
-    get_profile,
-    get_financial_statements,
-    get_historical_market_cap,
-    get_historical_prices,
-)
-
-from utils.context_manager import session_scope
-from utils.process_data import filter_bigint_range
-from datetime import datetime
-import pandas as pd
-from loguru import logger
-from database.db_connector import DBConnector
-
-# Add the run_id to logger context
-run_id = datetime.now().isoformat()
-logger.bind(run_id=run_id)
-
-
-# def store_to_db(df, table_name, db_connector, run_id):
-#     try:
-#         if db_connector.mongo_db is not None:
-#             # MongoDB
-#             db_connector.mongo_db.profiles.insert_many(df.to_dict(orient="records"))
-#             # db_connector.write_to_mongo(table_name, df)
-#         else:
-#             # SQL Databases
-#             with session_scope(db_connector.SessionLocal, run_id) as session:
-#                 df.to_sql(
-#                     table_name, con=db_connector.engine, if_exists="append", index=False
-#                 )
-#                 session.flush()
-
-#         logger.bind(run_id=run_id).info(f"Stored data into {table_name}")
-#     except Exception as e:
-#         logger.bind(run_id=run_id).error(
-#             f"Failed to store data into {table_name}. Error: {e}"
-#         )
-
-
-def store_to_db(df, table_name, db_connector, run_id):
-    try:
-        if df.empty:
-            logger.bind(run_id=run_id).warning(f"No data to store in {table_name}.")
-            return False
-
-        if db_connector.mongo_db is not None:
-            # MongoDB
-            result = db_connector.mongo_db[table_name].insert_many(
-                df.to_dict(orient="records")
-            )
-            if result.acknowledged:
-                logger.bind(run_id=run_id).info(
-                    f"Stored {len(result.inserted_ids)} records into {table_name}."
-                )
-                return True
-            else:
-                logger.bind(run_id=run_id).error(
-                    f"Failed to store data into {table_name}."
-                )
-                return False
-        else:
-            # SQL Databases
-            with session_scope(db_connector.SessionLocal, run_id) as session:
-                df.to_sql(
-                    table_name, con=db_connector.engine, if_exists="append", index=False
-                )
-                session.flush()
-                logger.bind(run_id=run_id).info(f"Stored data into {table_name}.")
-                return True
-    except Exception as e:
-        logger.bind(run_id=run_id).error(
-            f"Failed to store data into {table_name}. Error: {e}"
-        )
-        return False
-
-
-def fetch_equity_symbols(country="United States", market="NASDAQ Global Select"):
-    try:
-        equities = fd.Equities()
-        selected_columns = [
-            "name",
-            "currency",
-            "sector",
-            "industry_group",
-            "industry",
-            "exchange",
-            "market",
-            "market_cap",
-        ]
-        us_equities = equities.select(country=country)
-        df_equities = us_equities[us_equities["market"] == market][selected_columns]
-        list_symbols = list(df_equities.index)
-        logger.info(
-            f"Fetched {len(list_symbols)} equity symbols for {country} - {market}"
-        )
-        return list_symbols
-    except Exception as e:
-        logger.exception(
-            f"Failed to fetch equity symbols for {country} - {market}. Error: {e}"
-        )
-
-
-def get_new_symbols(list_symbols, db_connector):
-    try:
-        if db_connector.mongo_db is not None:
-            existing_symbols_cursor = db_connector.mongo_db["profiles"].find(
-                {"symbol": {"$in": list_symbols}}, {"symbol": 1}
-            )
-            existing_symbols_list = [doc["symbol"] for doc in existing_symbols_cursor]
-
-            new_symbols = list(set(list_symbols) - set(existing_symbols_list))
-
-        else:
-            # SQL Databases
-            existing_symbols_query = "SELECT symbol FROM profiles;"
-            existing_symbols = pd.read_sql(
-                existing_symbols_query, con=db_connector.engine
-            )
-
-            new_symbols = list(
-                set(list_symbols) - set(existing_symbols["symbol"].tolist())
-            )
-        logger.info(f"Identified {len(new_symbols)} new symbols")
-        return new_symbols
-    except Exception as e:
-        logger.exception(f"Failed to identify new symbols. Error: {e}")
-
-
-def fetch_and_store_profiles(db_connector, api_key, run_id):
-    list_symbols = [
-        "AAPL",
-        "MSFT",
-        # "FB",
-        # "TSLA",
-        # "META",
-        # "PYPL",
-        # "PLTR",
-        # "NIO",
-        # "BRK-B",
-    ]
-    new_symbols = get_new_symbols(list_symbols, db_connector)
-
-    if new_symbols:
-        df_profiles = get_profile(new_symbols, api_key)
-
-        if not df_profiles.empty:
-            list_cols = [
-                "symbol",
-                "companyName",
-                "cik",
-                "exchange",
-                "exchangeShortName",
-                "industry",
-                "sector",
-                "country",
-                "ipoDate",
-                "defaultImage",
-                "isEtf",
-                "isActivelyTrading",
-            ]
-            df_profiles_filtered = df_profiles[list_cols].copy()
-            df_profiles_filtered["ipoDate"].replace("", None, inplace=True)
-            df_profiles_filtered["cik"].replace("", None, inplace=True)
-
-            df_profiles_filtered["ipoDate"] = pd.to_datetime(
-                df_profiles_filtered["ipoDate"], errors="coerce"
-            )
-
-            store_to_db(df_profiles_filtered, "profiles", db_connector, run_id)
-        else:
-            logger.warning("No profiles found for the new symbols.")
-
-
-def get_equity_symbols(db_connector, table_name="equities"):
-    try:
-        if db_connector.mongo_db is not None:
-            # MongoDB operation
-
-            # df_equities = db_connector.read_from_mongo(table_name)
-            df_equities = db_connector.mongo_db.profiles.find({})
-            list_symbols = []
-            for df_equitie in df_equities:
-                list_symbols.append(df_equitie["symbol"])
-
-        else:
-            # SQL operation
-            query = f"SELECT DISTINCT symbol FROM {table_name};"
-            df_equitie = pd.read_sql(query, con=db_connector.engine)
-            list_symbols = set(df_equitie["symbol"].tolist())
-
-        return list_symbols
-    except Exception as e:
-        logger.exception(f"Error fetching equity symbols: {e}")
-        return []
-
-
-# def fetch_and_store_financial_statements(db_connector, api_key, run_id):
-#     try:
-#         if db_connector.mongo_db is not None:
-#             existing_symbols_df = []
-
-#         else:
-#             query = "SELECT DISTINCT symbol FROM cashflows;"
-#             existing_symbols_df = pd.read_sql(query, con=db_connector.engine)
-
-#             existing_symbols = set(existing_symbols_df["symbol"])
-
-#         existing_symbols = []
-#         list_symbols = get_equity_symbols(
-#             db_connector,
-#             "profiles",
-#         )  # Assuming this function fetches all equity symbols
-
-#         for symbol in list_symbols:
-#             if symbol not in existing_symbols:
-#                 df, invalid_tickers = get_financial_statements(
-#                     tickers=symbol,
-#                     statement="cashflow",
-#                     api_key=api_key,
-#                     start_date="2000-01-01",
-#                 )
-#                 filtered_df = filter_bigint_range(df, run_id)
-
-#                 print(filtered_df)
-#                 store_to_db(filtered_df, "cashflows", db_connector, run_id)
-
-#         logger.info("Stored financial statements for all symbols.")
-#     except Exception as e:
-#         logger.exception(f"An error occurred while storing financial statements: {e}")
-
-
-def fetch_and_store_financial_statements(db_connector, api_key, run_id):
-    try:
-        existing_symbols = get_equity_symbols(db_connector, "profiles")
-        for symbol in existing_symbols:
-            df, invalid_tickers = get_financial_statements(
-                tickers=symbol,
-                statement="cashflow",
-                api_key=api_key,
-                start_date="2000-01-01",
-            )
-            if not df.empty:
-                # Cast integer fields to int64
-                int64_fields = [
-                    "cik",
-                    "calendarYear",
-                    "deferredIncomeTax",
-                    "inventory",
-                    "accountsPayables",
-                    "otherNonCashItems",
-                    "acquisitionsNet",
-                    "otherInvestingActivites",
-                    "netCashUsedForInvestingActivites",
-                    "debtRepayment",
-                    "commonStockIssued",
-                    "effectOfForexChangesOnCash",
-                    "netChangeInCash",
-                    "commonStockRepurchased",
-                    "dividendsPaid",
-                    "otherFinancingActivites",
-                    "netCashUsedProvidedByFinancingActivities",
-                    "cashAtEndOfPeriod",
-                    "cashAtBeginningOfPeriod",
-                    "operatingCashFlow",
-                    "capitalExpenditure",
-                    "freeCashFlow",
-                ]
-
-                for field in int64_fields:
-                    df[field] = df[field].astype("int64")
-
-                # Convert date fields to datetime
-                date_fields = ["fillingDate", "acceptedDate"]
-                for field in date_fields:
-                    df[field] = pd.to_datetime(df[field])
-
-                filtered_df = filter_bigint_range(df, run_id)
-
-                print(
-                    filtered_df[
-                        ["cik", "acceptedDate", "calendarYear", "freeCashFlow"]
-                    ],
-                )
-
-                # Convert cik and calendarYear to 64-bit integers
-                filtered_df["cik"] = filtered_df["cik"].astype("int64")
-                filtered_df["calendarYear"] = filtered_df["calendarYear"].astype(
-                    "int64"
-                )
-
-                store_to_db(
-                    filtered_df[
-                        ["cik", "acceptedDate", "calendarYear", "freeCashFlow"]
-                    ],
-                    "cashflows",
-                    db_connector,
-                    run_id,
-                )
-    except Exception as e:
-        logger.exception(f"An error occurred while storing financial statements: {e}")
-
-
-# def fetch_and_store_financial_statements(db_connector, api_key, run_id):
-#     try:
-#         existing_symbols = get_equity_symbols(db_connector, "profiles")
-#         for symbol in existing_symbols:
-#             df, invalid_tickers = get_financial_statements(
-#                 tickers=symbol,
-#                 statement="cashflow",
-#                 api_key=api_key,
-#                 start_date="2000-01-01",
-#             )
-#             if not df.empty:
-#                 # Cast integer fields to int64
-#                 int_fields = [
-#                     "cik",
-#                     "calendarYear",
-#                     "deferredIncomeTax",
-#                     "inventory",
-#                     "accountsPayables",
-#                     "otherNonCashItems",
-#                     "acquisitionsNet",
-#                     "otherInvestingActivites",
-#                     "netCashUsedForInvestingActivites",
-#                     "debtRepayment",
-#                     "commonStockIssued",
-#                     "effectOfForexChangesOnCash",
-#                     "netIncome",
-#                     "depreciationAndAmortization",
-#                     "stockBasedCompensation",
-#                     "changeInWorkingCapital",
-#                     "accountsReceivables",
-#                     "otherWorkingCapital",
-#                     "netCashProvidedByOperatingActivities",
-#                     "investmentsInPropertyPlantAndEquipment",
-#                     "purchasesOfInvestments",
-#                     "salesMaturitiesOfInvestments",
-#                     "commonStockRepurchased",
-#                     "dividendsPaid",
-#                     "otherFinancingActivites",
-#                     "netCashUsedProvidedByFinancingActivities",
-#                     "netChangeInCash",
-#                     "cashAtEndOfPeriod",
-#                     "cashAtBeginningOfPeriod",
-#                     "operatingCashFlow",
-#                     "capitalExpenditure",
-#                     "freeCashFlow",
-#                 ]
-#                 for field in int_fields:
-#                     df[field] = df[field].astype("int64")
-
-#                 # Convert date fields to datetime
-#                 date_fields = ["fillingDate", "acceptedDate"]
-#                 for field in date_fields:
-#                     df[field] = pd.to_datetime(df[field])
-
-#                 filtered_df = filter_bigint_range(df, run_id)
-
-#                 # Convert necessary fields to 'int64'
-#                 int64_fields = [
-#                     "cik",
-#                     "calendarYear",
-#                     "deferredIncomeTax",
-#                     "inventory",
-#                     "accountsPayables",
-#                     "otherNonCashItems",
-#                     "acquisitionsNet",
-#                     "otherInvestingActivites",
-#                     "netCashUsedForInvestingActivites",
-#                     "debtRepayment",
-#                     "commonStockIssued",
-#                     "effectOfForexChangesOnCash",
-#                     # Add other fields that need to be converted to 'int64'
-#                 ]
-#                 for field in int64_fields:
-#                     filtered_df[field] = filtered_df[field].astype("int64")
-
-#                 # Convert date fields to proper datetime objects for MongoDB
-#                 date_fields = ["fillingDate", "acceptedDate"]
-#                 for field in date_fields:
-#                     filtered_df[field] = pd.to_datetime(filtered_df[field])
-
-#                 store_to_db(filtered_df, "cashflows", db_connector, run_id)
-#     except Exception as e:
-#         logger.exception(f"An error occurred while storing financial statements: {e}")
-
-
-def fetch_and_store_hist_prices(db_connector, api_key, run_id, chunk_size=100):
-    try:
-        list_symbols = get_equity_symbols(db_connector, "hist_prices")
-        for i in range(0, len(list_symbols), chunk_size):
-            chunk_symbols = list_symbols[i : i + chunk_size]
-            for symbol in chunk_symbols:
-                df = get_historical_prices(symbol, api_key)
-                filtered_df = filter_bigint_range(df, run_id)
-                store_to_db(filtered_df, "hist_prices", db_connector, run_id)
-
-        logger.info("Stored historical prices for all symbols.")
-    except Exception as e:
-        logger.exception(
-            f"An error occurred while fetching and storing historical prices: {e}"
-        )
-
-
-def fetch_and_store_market_cap_data(db_connector, api_key, run_id, chunk_size=100):
-    try:
-        list_symbols = get_equity_symbols(db_connector, "market_cap_data")
-        for i in range(0, len(list_symbols), chunk_size):
-            chunk_symbols = list_symbols[i : i + chunk_size]
-            for symbol in chunk_symbols:
-                df = get_historical_market_cap(symbol, api_key)
-                filtered_df = filter_bigint_range(df, run_id)
-                store_to_db(filtered_df, "hist_marketcap", db_connector, run_id)
-
-        logger.info("Stored market cap data for all symbols.")
-    except Exception as e:
-        logger.exception(
-            f"An error occurred while fetching and storing market cap data: {e}"
-        )
+# # Initialize DBConnector
+# db = DBConnector()
+# db.initialize_db("MONGO")
+# db.create_collection(
+#     os.getenv("MONGO_URI"), os.getenv("MONGO_DB_NAME"), "your_collection_name"
+# )
