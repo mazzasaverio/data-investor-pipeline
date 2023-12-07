@@ -8,7 +8,7 @@ from loguru import logger
 import sys
 
 # Import custom modules
-from database.db_connector import DBConnector
+from data_storage.db_connector import DBConnector
 
 from fetch_data.fetch_equities import (
     fetch_and_store_profiles,
@@ -16,7 +16,7 @@ from fetch_data.fetch_equities import (
     fetch_and_store_hist_prices,
     fetch_and_store_market_cap_data,
 )
-from database.models_mongo import (
+from data_storage.models_mongo import (
     create_profiles_collection,
     create_cashflows_collection,
 )
